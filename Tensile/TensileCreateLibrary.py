@@ -383,6 +383,10 @@ def writeLogic(outputPath, logicData, solutionWriter ):
         else:
           s += "get device name hip;\n"
 
+
+#       if deviceNames != default
+
+
         for scheduleIdx in range(0, numSchedules):
           schedule = schedules[scheduleIdx]
           deviceNames = schedule[1]
@@ -403,7 +407,7 @@ def writeLogic(outputPath, logicData, solutionWriter ):
             s += "%s%s" \
                 % (argListSizes[i][1],
                     ", " if i < len(argListSizes)-1 else ");\n")
-            s += "}"
+#           s += "}"
       else: # == 1
         schedule = schedules[0]
         scheduleName = schedule[0]
