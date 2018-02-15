@@ -717,8 +717,6 @@ def TensileCreateLibrary():
       action="store_true")
   argParser.add_argument("--no-library-print-debug", dest="LibraryPrintDebug", \
       action="store_false")
-  argParser.add_argument("--isa", dest="isa", action="append",
-      help="which architectures for assembly kernels to target" )
   args = argParser.parse_args()
 
   logicPath = args.LogicPath
@@ -730,21 +728,21 @@ def TensileCreateLibrary():
   arguments["MergeFiles"] = args.MergeFiles
   arguments["ShortNames"] = args.ShortNames
   arguments["LibraryPrintDebug"] = args.LibraryPrintDebug
-  if args.isa:
-    newISA = []
-    for isa in args.isa:
-      gfxIdx = isa.find("gfx")
-      if gfxIdx >= 0:
-        major = int(isa[gfxIdx+3:gfxIdx+4])
-        minor = int(isa[gfxIdx+4:gfxIdx+5])
-        step  = int(isa[gfxIdx+5:gfxIdx+6])
-        isaTuple = (major,minor,step)
-        if isaTuple in globalParameters["SupportedISA"] and isaTuple not in newISA:
-          print1("# User-Specified ISA: gfx%u%u%u" % (major,minor,step))
-          newISA.append(isaTuple)
-      else:
-        printWarning("isa parameter must be formed as: --isa gfx803")
-    arguments["SupportedISA"] = newISA
+# if args.isa:
+#   newISA = []
+#   for isa in args.isa:
+#     gfxIdx = isa.find("gfx")
+#     if gfxIdx >= 0:
+#       major = int(isa[gfxIdx+3:gfxIdx+4])
+#       minor = int(isa[gfxIdx+4:gfxIdx+5])
+#       step  = int(isa[gfxIdx+5:gfxIdx+6])
+#       isaTuple = (major,minor,step)
+#       if isaTuple in globalParameters["SupportedISA"] and isaTuple not in newISA:
+#         print1("# User-Specified ISA: gfx%u%u%u" % (major,minor,step))
+#         newISA.append(isaTuple)
+#     else:
+#       printWarning("isa parameter must be formed as: --isa gfx803")
+#   arguments["SupportedISA"] = newISA
   assignGlobalParameters(arguments)
 
   if not os.path.exists(logicPath):
@@ -789,6 +787,7 @@ def TensileCreateLibrary():
         kernelsBetaOnly.append(kernel)
 
   # if any kernels are assembly, append every ISA supported
+  """
   if globalParameters["RuntimeLanguage"] == "HIP":
     newKernels = []
     for kernel in kernels:
@@ -801,6 +800,7 @@ def TensileCreateLibrary():
       else:
         kernel["ISA"] = (0,0,0)
     kernels.extend(newKernels)
+  """
 
 
   if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
