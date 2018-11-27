@@ -750,8 +750,11 @@ class KernelWriterAssembly(KernelWriter):
     if kernel["ProblemType"]["HighPrecisionAccumulate"]:
         if kernel["ProblemType"]["DataType"].isHalf():
             self.bpeCinternal = int(self.bpr*1)
+        elif kernel["ProblemType"]["DataType"].isInt8x4():
+            # numRegisters for Int8x4 = numRegisters for float = 1
+            self.bpeCinternal = int(self.bpr* kernel["ProblemType"]["DataType"].numRegisters())
         else:
-            print "HighPrecisionAccumulate only valid when DataType is half."
+            print "HighPrecisionAccumulate only valid when DataType is half, Int8x4."
             self.bpeCinternal = int(self.bpr*\
                 kernel["ProblemType"]["DataType"].numRegisters())
             kernel["ProblemType"]["HighPrecisionAccumulate"] = False
@@ -1567,6 +1570,38 @@ class KernelWriterAssembly(KernelWriter):
                   """
             else:
               printExit("Half-precision not supported for arch=%u" % self.version )
+
+                  cStr = "v[%s+%u*2+%u*%u*2+0*2+0]" % ("vgprValuC", blockA, blockB, kernel["ThreadTile0"]) # *2 b/c of fp32
+                  cidx = blockA*2 + blockB*kernel["ThreadTile0"]*2 + 0
+
+      # integer i8
+      elif kernel["ProblemType"]["DataType"].isInt8x4():
+        for b in range(0, kernel["ThreadTile1"]):
+          for a in range(0, kernel["ThreadTile0"]):
+            if self.version == (8,0,3):
+              kStr += self.comment3("int8 not implemented yet for gfx803:")
+            elif self.version == (9,0,0):
+              kStr += self.comment3("int8 not implemented yet for gfx900:")
+            elif self.version == (9,0,6):
+              for iui in range(0, innerUnroll):
+                cidx = a + b*kernel["ThreadTile0"] + 0
+                cStr = "v[%s+%u+%u*%u]" % ("vgprValuC", a, b, kernel["ThreadTile0"])
+                aStr = "v[%s+%u]"       % ("vgprValuA_X%u_I%u"%(m,iui), a)
+                bStr = "v[%s+%u]"       % ("vgprValuB_X%u_I%u"%(m,iui), b)
+# this will be same as "single precision" except for the dot4 instruction replacing the v_mac_f32 instruction
+# below is a guss of the v_dot_i32_i8 instruction based on the dot2 instruction. It will need editing to account 
+# for the registers for a and b having 4 values, and the need to add saturation directive to clamp integer arithmetic
+//              kStr += "v_mac_f32 %s, %s, %s%s" % (cStr, aStr, bStr, self.endLine) # single precision
+//              kStr += "v_dot2_f32_f16 %s, %s, %s, %s op_sel:[0,0] op_sel_hi:[1,1] //valuC[%u]%s" % (cStr, aStr, bStr, cStr, cidx, self.endLine) # hpa_hgemm
+                kStr += "v_dot4_i32_i8  %s, %s, %s, %s op_sel:[0,0] op_sel_hi:[1,1] //valuC[%u]%s" % (cStr, aStr, bStr, cStr, cidx, self.endLine)
+
+                if macIdx == kernel["PerformanceWaitLocation"]:
+                    kStr += "s_waitcnt lgkmcnt(%u) // extra wait for performance%s" \
+                        % (kernel["PerformanceWaitCount"], self.endLine)
+                if macIdx == kernel["PerformanceSyncLocation"]:
+                    kStr += "s_barrier // extra barrier for performance%s" \
+                        % (self.endLine)
+                macIdx += 1
 
 
       # single precision
@@ -5011,6 +5046,9 @@ class KernelWriterAssembly(KernelWriter):
     if kernel["ProblemType"]["DataType"].isHalf() and not kernel["ProblemType"]["HighPrecisionAccumulate"]:
       assert(kernel["VectorWidth"]%2 == 0)
       elementStep = 2*(useDwordX2+1)
+    elif kernel["ProblemType"]["DataType"].isInt8x4():
+      # assume this is the same as for isSingle
+      elementStep = 1*(useDwordX2+1)
     elif kernel["ProblemType"]["DataType"].isSingle():
       elementStep = 1*(useDwordX2+1)
     elif kernel["ProblemType"]["DataType"].isDouble():
@@ -5183,6 +5221,13 @@ class KernelWriterAssembly(KernelWriter):
             cIdx /= elementStep
             regIdx /= elementStep
             kStr += inst("v_pk_add_f16", vgpr("ValuC+%u"%cIdx), \
+                vgpr("ValuC+%u" % regIdx), vgpr("ValuC+%u"%cIdx), "c[%u] += c[%u]"%(cIdx, regIdx) )
+          elif kernel["ProblemType"]["DataType"].isInt8x4():
+            cIdx /= elementStep
+            regIdx /= elementStep
+            # assume v_add_i32 can be used in place of v_add_f32
+            # need to add saturation directive to v_add_i32 instruction to clamp integer arithmetic
+            kStr += inst("v_add_i32", vgpr("ValuC+%u"%cIdx), \
                 vgpr("ValuC+%u" % regIdx), vgpr("ValuC+%u"%cIdx), "c[%u] += c[%u]"%(cIdx, regIdx) )
           elif kernel["ProblemType"]["DataType"].isSingle():
             cIdx /= elementStep
@@ -5910,6 +5955,12 @@ class KernelWriterAssembly(KernelWriter):
         kStr += inst("v_pk_add_f16", \
                   dst, src0, src1, \
                   comment)
+    elif kernel["ProblemType"]["DataType"].isInt8x4():
+      # assume v_add_i32 can be used in place of v_add_f32
+      # need to add saturation directive to v_add_i32 instruction to clamp integer arithmetic
+      kStr += inst("v_add_i32", \
+                dst, src0, src1, \
+                comment)
     elif kernel["ProblemType"]["DataType"].isSingle():
       kStr += inst("v_add_f32", \
                 dst, src0, src1, \
@@ -6194,6 +6245,12 @@ class KernelWriterAssembly(KernelWriter):
                 kStr += inst("v_pk_mul_f16", vgpr("ValuC+%u"%(sumIdxV/2)), sgpr("Alpha"), vgpr("ValuC+%u"%(sumIdxV/2)), "*= alpha sumIdx=%u vi=%u"%(elementSumIdx[elementIdx], vi))
             else: # HPA
               kStr += inst("v_mul_f32", vgpr("ValuC+%u"%sumIdxV), sgpr("Alpha"), vgpr("ValuC+%u"%sumIdxV), "*= alpha")
+
+          elif kernel["ProblemType"]["DataType"].isInt8x4():
+            # below assume we use s_mul_i32 not v_mul_i32_i24. this assumes accuracy more important then speed. Is this a correct assumption?
+            kStr += inst("s_mul_i32", vgpr("ValuC+%u"%sumIdxV), sgpr("Alpha"), vgpr("ValuC+%u"%sumIdxV), "*= alpha" )
+            if self.db["CheckValueC"] >= 0:
+              kStr += self.assert_eq(vgpr("ValuC+%u"%sumIdxV), 0.0)
 
           elif kernel["ProblemType"]["DataType"].isSingle():
             kStr += inst("v_mul_f32", vgpr("ValuC+%u"%sumIdxV), sgpr("Alpha"), vgpr("ValuC+%u"%sumIdxV), "*= alpha" )
@@ -6483,6 +6540,11 @@ class KernelWriterAssembly(KernelWriter):
               kStr += inst("v_mac_f32", vgpr("ValuC+%u"%sumIdxV), vgpr(dataV+0), sgpr("Beta"), \
                   "finalSum = sum*alpha + C*beta")
 
+            elif kernel["ProblemType"]["DataType"].isInt8x4():
+              # assume we will need to replace v_mad_i32_i24 below with v_add_i32 and s_mul_i32
+              kStr += inst("v_mad_i32_i24", vgpr("ValuC+%u"%sumIdxV), vgpr(dataV+0), sgpr("Beta"), \
+                  "finalSum = sum*alpha + C*beta")
+
             elif kernel["ProblemType"]["DataType"].isDouble():
               # dataV+0 = new c = old c*beta
               kStr += inst("v_fma_f64", vgpr("ValuC+%u"%(sumIdxV*2),2), vgpr(dataV+0,2), sgpr("Beta",2), vgpr("ValuC+%u"%(sumIdxV*2),2), \
@@ -6528,6 +6590,10 @@ class KernelWriterAssembly(KernelWriter):
             else:
               kStr += self.chooseGlobalStore(useBuffer, bps, sumIdx, rpv, \
                         addr0, addr1, 0, ntStr, hi16=0)
+          elif kernel["ProblemType"]["DataType"].isInt8x4():
+            # assume this is the same as for isSingle
+            kStr += self.chooseGlobalStore(useBuffer, bps, sumIdx, rpv, \
+                      addr0, addr1, 0, ntStr)
           elif kernel["ProblemType"]["DataType"].isSingle():
             kStr += self.chooseGlobalStore(useBuffer, bps, sumIdx, rpv, \
                       addr0, addr1, 0, ntStr)
@@ -6559,6 +6625,10 @@ class KernelWriterAssembly(KernelWriter):
             else:
               kStr += self.chooseGlobalLoad(useBuffer, bps, sumIdx, \
                         addr0, addr1, soffset=0, offset=0, extraFields="", hi16=0)
+          elif kernel["ProblemType"]["DataType"].isInt8x4():
+            # assume this is the same as for isSingle
+            kStr += self.chooseGlobalLoad(useBuffer, bps, sumIdx, \
+                      addr0, addr1, soffset=0, offset=0, extraFields="")
           elif kernel["ProblemType"]["DataType"].isSingle():
             kStr += self.chooseGlobalLoad(useBuffer, bps, sumIdx, \
                       addr0, addr1, soffset=0, offset=0, extraFields="")
