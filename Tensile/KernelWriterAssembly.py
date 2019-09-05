@@ -1844,7 +1844,7 @@ class KernelWriterAssembly(KernelWriter):
                 % ("vgprValuB_X%u_I%u"%(m,iui), b)
             #if a==0 and b==0:
             #  kStr += dump(aStr)
-            kStr += "v_mac_f32 %s, %s, %s%s" % (cStr, aStr, bStr, self.endLine)
+            # kStr += "v_mac_f32 %s, %s, %s%s" % (cStr, aStr, bStr, self.endLine)
             if beAggressive and not doOnce:
               kStr += "s_setprio 1 // Raise priority while processing macs%s" % self.endLine
               doOnce = True
