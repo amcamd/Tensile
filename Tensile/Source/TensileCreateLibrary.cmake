@@ -52,11 +52,13 @@ function(TensileCreateLibraryCmake
 
   set(Tensile_CREATE_COMMAND "${Tensile_ROOT}/bin/TensileCreateLibrary")
 
+  file(MAKE_DIRECTORY ${Tensile_ROOT}/bin/TensileCreateLibrary/temp)
 
-  file (RENAME ${Tensile_ROOT}/bin/TensileCreateLibrary ${Tensile_ROOT}/bin/TensileCreateLibrary.tmp)
+  file (COPY ${Tensile_ROOT}/bin/TensileCreateLibrary DESTINATION ${Tensile_ROOT}/bin/temp FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE)
 
-  file (COPY ${Tensile_ROOT}/bin/TensileCreateLibrary.tmp DESTINATION ${Tensile_ROOT}/bin FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE)
+  file(REMOVE ${Tensile_ROOT}/bin/TensileCreateLibrary)
 
+  file (COPY ${Tensile_ROOT}/bin/temp/TensileCreateLibrary DESTINATION ${Tensile_ROOT}/bin FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE)
 
   set(Tensile_SOURCE_PATH "${PROJECT_BINARY_DIR}/Tensile")
   message(STATUS "Tensile_SOURCE_PATH=${Tensile_SOURCE_PATH}")
