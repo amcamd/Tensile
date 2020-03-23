@@ -55,7 +55,7 @@ function(TensileCreateLibraryCmake
 
   file (RENAME ${Tensile_ROOT}/bin/TensileCreateLibrary ${Tensile_ROOT}/bin/TensileCreateLibrary.tmp)
 
-  file (COPY ${Tensile_ROOT}/bin/TensileCreateLibrary.tmp DESTINATION ${Tensile_ROOT}/bin/TensileCreateLibrary FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE)
+  file (COPY ${Tensile_ROOT}/bin/TensileCreateLibrary.tmp DESTINATION ${Tensile_ROOT}/bin FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE)
 
 
   set(Tensile_SOURCE_PATH "${PROJECT_BINARY_DIR}/Tensile")
